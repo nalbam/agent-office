@@ -2314,7 +2314,9 @@ PYEOF
     file_count=${file_count:-0}
     if [[ "$file_count" =~ ^[0-9]+$ ]] && [[ "$file_count" -gt 0 ]]; then
       archive_broken_links=$((archive_broken_links + file_count))
-      diagnostic=$(printf '%s\n' "$broken_output" | head -n -1)
+      # `sed '$d'`, not `head -n -1`: a negative count is GNU-only and aborts this
+      # script under `set -e` on BSD/macOS `head`.
+      diagnostic=$(printf '%s\n' "$broken_output" | sed '$d')
       [[ -n "$diagnostic" ]] && archive_broken_link_list="${archive_broken_link_list}${diagnostic}\n"
     fi
   done < <(find "$ARCHIVE_DIR" -maxdepth 2 -name '*.md' -not -name '.gitkeep*' -print0 2>/dev/null)
