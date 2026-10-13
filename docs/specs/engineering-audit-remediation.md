@@ -216,3 +216,28 @@ the dev server by a custom hostname or reverse proxy got Vite's default 403 rega
 - **Docs**: `README.md`'s 403-by-hostname troubleshooting entry and `docs/deployment/
   DEPLOYMENT.md`'s `OFFICE_ALLOWED_HOSTS` row both now note the var also governs `npm run dev`,
   not only `server.mjs`.
+
+## 2026-10-13 Symlinked Status-Dir Follow-Up
+
+The 2026-09-26 Dev-Server Parity Wave's R-3 exclusion (`OFFICE_STATUS_DIR` nested inside the
+project root must not feed the file-watcher fallback) compared path strings as given. That holds
+only when the status directory has one spelling. Found on macOS, where `tests/viteDevServerParity.test.js`
+R-3 failed on every run: `os.tmpdir()` is `/var/folders/…`, a symlink to `/private/var/folders/…`.
+Branch `fix/macos-symlink-status-dir`; scope limited to `isUnderStatusDir` in `vite.config.mjs`.
+
+- **Root cause**: Vite realpaths `server.config.root`, and the shared chokidar watcher reports one
+  write once per registered spelling — `/private/var/…` from the project-root watch and `/var/…`
+  from the `STATUS_DIR` watch. The `/var/…` event fails `isUnderProjectRoot` and is dropped. The
+  `/private/var/…` event passes it, and `isUnderStatusDir` then compared that path against the
+  as-given `/var/…` `STATUS_DIR`, never matched, and `writeStatus` fabricated a `source:
+  'file-watcher'` agent from a non-source file.
+- **Fix**: `isUnderStatusDir` compares real paths (`fs.realpathSync.native`) of both the file and
+  the status directory. The directory is resolved per event because it may not exist when the
+  server boots; a path that cannot be resolved falls back to its `path.resolve` form, which is the
+  previous behavior. The Windows case-fold is unchanged.
+- **Reach**: any platform where `OFFICE_STATUS_DIR` sits inside the project root and is reached
+  through a symlink. The default `~/.claude` outside the project root was never affected —
+  `isUnderProjectRoot` already drops those events.
+- **Tests**: the existing R-3 case is the regression test — red 3/3 runs before the change on
+  macOS 15 / Node 24, green 5/5 after. No new test: R-3 already asserts the behavior, and it only
+  exercises the symlink path on a platform whose temp directory is a symlink.

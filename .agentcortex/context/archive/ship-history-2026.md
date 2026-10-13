@@ -76,6 +76,16 @@ Rotated 1 additional entry on 2026-10-07 (SSoT Update Sequence 145 -> 146).
 
 Rotated 1 additional entry on 2026-10-11 (SSoT Update Sequence 147 -> 148).
 
+Rotated 1 additional entry on 2026-10-13 (SSoT Update Sequence 148 -> 149).
+
+### Ship-fix-hook-robustness-privacy-2026-09-27 (the status lock can't be stolen twice, writes survive Windows file locks, and search text stays out of labels)
+
+- Feature shipped: remediated 6 audit findings (2026-09-26) across `office-status-hook.js`, `bridge.js`, `generic-llm-bridge.js`, `bin/cli.js`. Lock stale-steal race closed via identity-verified (token+mtime) post-rename recheck + EPERM/EBUSY retry (probes `toctou2.cjs`/`threeway.cjs`); `atomicWriteJson` retries tmp-write+rename internally before falling back to a direct write; `extractContext()` no longer returns raw `WebSearch` query text or `Agent` descriptions verbatim (both fall through to the existing generic-noun fallback label — user-visible: generic "Searching"/delegating label instead of leaked task text); `bridge.js` closes a client-forgeable `source` field; `generic-llm-bridge.js` scopes `getGitChangedFiles` to the `--watch` dir (was `process.cwd()`), anchors the ignore regex, and accepts `--port=N`; `bin/cli.js` gets symlink-safe settings write + null-guard uninstall + per-file unlink guard.
+- **3 rounds of implement/review**: round 1 review NOT READY (AC-1 disproven — two-stealer double-own via probe `toctou2.cjs`); round 2 closed HIGH/MEDIUM (identity-verified steal + EPERM/EBUSY retry), review PASS; round 3 corrected the residual description to the real move-aside/rename-back window (not the pre-rename gap the code already caught), added orphan-`.stale.*` cleanup + 3 mutant-kill/regression tests, review PASS at `9642509`.
+- **Accepted residual (documented, not eliminated)**: the lock's move-aside/rename-back window is bounded and self-healing (orphaned `.stale.*` dirs cleaned up on next acquire) — worst case one lost status update under adversarial concurrent-crash timing. Full root-cause: `docs/specs/hook-robustness-privacy.md` `## Domain Decisions`.
+- Merged `origin/main` (PR #246 server-hardening, #247 codex-hook-isolation, #248 dev-server-parity) before ship; one expected conflict in `office-status-hook.js`'s `module.exports` tail (both branches appended an export line), resolved by keeping both; `cleanupGhostAliases` `source === 'claude-cli'` gate confirmed intact post-merge.
+- Tests: full suite post-merge **142 files / 2633 tests**, all green (2 files hit load-contention 5000ms timeouts in the combined run on a heavily-loaded shared box, both untouched by this branch; isolated re-run: 2 files / 5 tests green, no regression). Build clean. `npm run smoke:pack` 4/4 PASS. `validate.sh` pass=114 warn=6 fail=0 skip=5 (all WARNs pre-existing/historical, none touching this branch). PR #249.
+
 ### Ship-fix-dev-server-parity-2026-09-26 (the dev server stops inventing agent status from ~/.claude and matches production CORS)
 
 - Quick-win shipped: remediated the remaining dev-only (`vite.config.mjs`) divergences from `server.mjs` (production) for the status transport, found in a 2026-09-26 re-audit that followed the 2026-09-24 wave's shared-clock fix. Scope: `vite.config.mjs`, the dev-start warning lines in `bin/cli.js`, and a one-line `STALE_MS` export from `src/server/scanSessions.mjs`.

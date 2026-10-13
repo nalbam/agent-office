@@ -803,12 +803,22 @@ function fileWatcherFallbackPlugin() {
       }
       // Also exclude STATUS_DIR explicitly, even when it happens to live INSIDE the project
       // root (e.g. a relative OFFICE_STATUS_DIR) — isUnderProjectRoot alone would admit it.
+      // Compare REAL paths, not the strings as given. Vite realpaths its root, and the shared
+      // watcher reports a file once per registered spelling — so when STATUS_DIR is reached
+      // through a symlink (macOS: os.tmpdir() is /var/folders/… → /private/var/folders/…),
+      // the event that passes isUnderProjectRoot carries the /private/… spelling, which a
+      // string compare against the as-given STATUS_DIR never matches. The directory is
+      // resolved per event because it may not exist yet when the server boots.
       const statusDirResolved = path.resolve(path.dirname(statusPath))
-      const statusDirLower = isWin ? statusDirResolved.toLowerCase() : statusDirResolved
+      function realPathOf(p) {
+        try { return fs.realpathSync.native(p) } catch { return p }  // not created yet / already removed
+      }
       function isUnderStatusDir(file) {
-        const resolved = path.resolve(file)
+        const dir = realPathOf(statusDirResolved)
+        const resolved = realPathOf(path.resolve(file))
+        const dirCmp = isWin ? dir.toLowerCase() : dir
         const cmp = isWin ? resolved.toLowerCase() : resolved
-        return cmp === statusDirLower || cmp.startsWith(statusDirLower + path.sep)
+        return cmp === dirCmp || cmp.startsWith(dirCmp + path.sep)
       }
       // Ignored path segments, matched against the path RELATIVE TO projectRoot (not the
       // absolute path) — an absolute-path substring test false-matches any project whose
